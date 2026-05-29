@@ -137,6 +137,7 @@ class MechPlotGUI:
         self.width_var = tk.StringVar()
         self.thickness_var = tk.StringVar()
         self.gauge_var = tk.StringVar()
+        self.E_var = tk.StringVar()  # 弹性模量 (GPa)
         self.dpi_var = tk.StringVar(value='150')
         self.style_var = tk.StringVar(value='default')
         self.show_uts_var = tk.BooleanVar(value=False)
@@ -192,6 +193,10 @@ class MechPlotGUI:
         ttk.Entry(r, textvariable=self.thickness_var, width=6).pack(side='left', padx=1)
         ttk.Label(r, text='标距').pack(side='left', padx=(4,0))
         ttk.Entry(r, textvariable=self.gauge_var, width=6).pack(side='left', padx=1)
+        r2 = ttk.Frame(frm); r2.pack(fill='x', pady=2)
+        ttk.Label(r2, text='E(GPa)').pack(side='left')
+        ttk.Entry(r2, textvariable=self.E_var, width=6).pack(side='left', padx=1)
+        ttk.Label(r2, text='(留空不修正)', foreground='gray').pack(side='left', padx=4)
 
         # 选项 (紧凑)
         frm = ttk.LabelFrame(left, text='选项', padding=4)
@@ -387,6 +392,14 @@ class MechPlotGUI:
                 self._log(f'  ✅ {name}: {len(sp.load)}点 UTS={sp.uts:.0f}MPa')
             except Exception as e:
                 self._log(f'  ❌ {name}: {e}')
+
+        # 弹性模量修正
+        E_gpa = float(self.E_var.get() or 0)
+        if E_gpa > 0 and specimens:
+            E_mpa = E_gpa * 1000
+            self._log(f'🔧 E修正: 目标 {E_gpa} GPa')
+            for sp in specimens:
+                DataProcessor.correct_elastic_modulus(sp, E_mpa)
         return specimens
 
     def _correct(self, specimens):

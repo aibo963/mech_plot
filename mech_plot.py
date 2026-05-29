@@ -547,6 +547,95 @@ class DataProcessor:
                 specimen.strain = specimen.strain - specimen.strain[0]
         return specimen
 
+    @staticmethod
+    def correct_elastic_modulus(specimen: SpecimenData, E_true: float) -> SpecimenData:
+        """
+        根据用户指定的真实弹性模量修正应变/位移
+
+        原理: 如果测量的E偏低（系统柔度、引伸计滑移等），
+        说明应变被高估了。修正: ε_true = ε_measured × (E_measured / E_true)
+
+        Args:
+            specimen: 已转换为应力-应变的试样数据
+            E_true: 用户指定的真实弹性模量 (MPa)
+        """
+        if specimen.stress is None or specimen.strain is None:
+            return specimen
+        if len(specimen.stress) < 20:
+            return specimen
+
+        stress = specimen.stress
+        strain = specimen.strain
+
+        # 滑动窗口找弹性段: 斜率×R² 最高
+        uts = np.max(stress)
+        W = max(15, len(stress) // 100)  # 窗口大小
+        best_score = 0
+        best_slope = 0
+
+        for i in range(0, len(stress) - W):
+            s = stress[i:i+W]
+            e = strain[i:i+W]
+
+            # 跳过高应力区 (>60% UTS)
+            if np.max(s) > uts * 0.6:
+                continue
+
+            # 跳过非单调区
+            if np.sum(np.diff(s) < 0) > W * 0.15:
+                continue
+
+            if np.std(e) < 1e-6:
+                continue
+
+            coeffs = np.polyfit(e, s, 1)
+            slope = coeffs[0]
+            if slope <= 0:
+                continue
+
+            y_pred = np.polyval(coeffs, e)
+            ss_res = np.sum((s - y_pred)**2)
+            ss_tot = np.sum((s - np.mean(s))**2)
+            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+
+            score = slope * (r2 ** 2)
+            if score > best_score and r2 > 0.95:
+                best_score = score
+                best_slope = slope
+
+        if best_slope <= 0:
+            print(f"  ⚠ [{specimen.name}] 未找到弹性段，跳过E修正")
+            return specimen
+
+        # E = dσ/dε, 应变是%单位, E = slope × 100
+        E_measured = best_slope * 100  # MPa
+
+        if E_measured < 1000 or E_measured > 500000:
+            print(f"  ⚠ [{specimen.name}] 测量E={E_measured:.0f}MPa不合理，跳过修正")
+            return specimen
+
+        # 修正因子: 应变被高估了 ratio 倍，需要缩小
+        ratio = E_measured / E_true
+
+        if abs(ratio - 1.0) < 0.02:
+            print(f"  ✅ [{specimen.name}] E={E_measured/1000:.1f}GPa ≈ {E_true/1000:.1f}GPa，无需修正")
+            return specimen
+
+        # 修正应变和位移: ε_true = ε_measured × (E_measured / E_true)
+        specimen.strain = strain * ratio
+        if specimen.gauge_length > 0:
+            specimen.displacement = specimen.displacement * ratio
+
+        # 重新计算力学性能
+        uts_idx = np.argmax(specimen.stress)
+        specimen.uts = float(specimen.stress[uts_idx])
+        if len(specimen.strain) > 0 and specimen.strain[-1] > 0:
+            specimen.elongation = float(specimen.strain[-1])
+
+        print(f"  🔧 [{specimen.name}] E修正: {E_measured/1000:.1f}→{E_true/1000:.1f}GPa, 比值={ratio:.4f}")
+
+        return specimen
+
 
 # ============================================================
 # 弹性段自动检测与修正
@@ -1951,6 +2040,8 @@ def main():
                        help='标距 (mm)')
     parser.add_argument('--area', type=float, default=0,
                        help='截面积 (mm²)，优先于 width*thickness')
+    parser.add_argument('--elastic-modulus', type=float, default=0,
+                       help='真实弹性模量 (GPa)，用于修正应变/位移')
     parser.add_argument('--specimen-info', default=None,
                        help='试样信息CSV文件路径 (自动匹配列名)')
     parser.add_argument('--interactive', action='store_true',
@@ -2033,6 +2124,13 @@ def main():
     specimens = processor.load_batch(path)
 
     print(f"\n✅ 成功加载 {len(specimens)} 个试样")
+
+    # 弹性模量修正
+    E_true = args.elastic_modulus * 1000  # GPa → MPa
+    if E_true > 0:
+        print(f"\n🔧 弹性模量修正: 目标 E = {args.elastic_modulus} GPa ({E_true:.0f} MPa)")
+        for sp in specimens:
+            DataProcessor.correct_elastic_modulus(sp, E_true)
 
     # 弹性段检测与修正
     diagnostics = {}
