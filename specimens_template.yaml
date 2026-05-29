@@ -1,0 +1,26 @@
+# mech_plot 配置文件模板
+# 复制此文件为 specimens.yaml 放在数据目录下，或用 --config 指定路径
+#
+# 说明:
+#   - default: 所有试样共用的默认参数
+#   - specimens: 每个试样的独立参数 (key = 文件名不含扩展名)
+#     可覆盖 default 中的任何字段
+
+default:
+  width: 3.56        # mm
+  thickness: 1.69    # mm
+  gauge_length: 20   # mm
+  # cross_section: 5.0  # mm² (如指定则忽略 width*thickness)
+
+specimens:
+  试样1:
+    composition: "0.05C"
+    treatment: "冷轧退火"
+  试样2:
+    composition: "0.05C"
+    treatment: "热轧退火"
+  试样3:
+    width: 3.50
+    thickness: 1.72
+    composition: "0.05C"
+    treatment: "固溶"

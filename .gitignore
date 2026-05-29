@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# 输出文件
+*.png
+*.pdf
+*.svg
+*.csv
+!试样信息.csv
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# 环境
+venv/
+.env
