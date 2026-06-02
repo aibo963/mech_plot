@@ -386,27 +386,33 @@ class MechPlotGUI:
                     return
                 self.specimens = specimens
 
-                # 自动弹性段修正
+                # 自动弹性段修正（跳过没有应力应变数据的试样）
                 if self.fix_elastic_var.get():
                     self._log('🔍 弹性段修正...')
-                    self.diagnostics, self.props_dict, self.specimens_orig = self._correct(specimens)
+                    valid_specimens = [sp for sp in specimens if sp.stress is not None]
+                    if valid_specimens:
+                        self.diagnostics, self.props_dict, self.specimens_orig = self._correct(valid_specimens)
 
                 names = [sp.name for sp in specimens]
                 self.root.after(0, lambda: self.specimen_combo.configure(values=names))
                 if names:
                     self.root.after(0, lambda: self.specimen_combo.set(names[0]))
 
-                # 生成四张诊断图
+                # 生成四张诊断图（只对有应力应变数据的试样）
                 if names:
                     # 获取容器尺寸
                     self.root.after(0, lambda: None)  # 同步布局
                     fs0 = self._get_panel_figsize(0)
-                    figs_data = self._make_figs(names[0], figsize=fs0)
-                    for i, (fig, data) in enumerate(figs_data):
-                        if fig:
-                            self.root.after(0, lambda f=fig, d=data, p=self.panels[i]: p.show(f, d))
-
-                self._log(f'  ✅ {names[0]}: {len(specimens[0].load)}点 UTS={specimens[0].uts:.0f}MPa')
+                    # 找到第一个有应力应变数据的试样
+                    first_valid = next((sp for sp in specimens if sp.stress is not None), None)
+                    if first_valid:
+                        figs_data = self._make_figs(first_valid.name, figsize=fs0)
+                        for i, (fig, data) in enumerate(figs_data):
+                            if fig:
+                                self.root.after(0, lambda f=fig, d=data, p=self.panels[i]: p.show(f, d))
+                        self._log(f'  ✅ {first_valid.name}: {len(first_valid.load)}点 UTS={first_valid.uts:.0f}MPa')
+                    else:
+                        self._log(f'  ⚠️ 已加载 {len(specimens)} 个试样，请输入试样尺寸后点击"确认更新"')
                 if len(specimens) > 1:
                     self._log(f'  ... 共{len(specimens)}个试样')
             except Exception as e:
@@ -439,10 +445,15 @@ class MechPlotGUI:
             name = Path(f).stem
             try:
                 sp = processor.load_specimen(f, name)
-                sp = DataProcessor.convert_to_stress_strain(sp)
-                sp = DataProcessor.normalize_strain_start(sp)
-                specimens.append(sp)
-                self._log(f'  ✅ {name}: {len(sp.load)}点 UTS={sp.uts:.0f}MPa')
+                try:
+                    sp = DataProcessor.convert_to_stress_strain(sp)
+                    sp = DataProcessor.normalize_strain_start(sp)
+                    specimens.append(sp)
+                    self._log(f'  ✅ {name}: {len(sp.load)}点 UTS={sp.uts:.0f}MPa')
+                except ValueError as e:
+                    # 缺少尺寸信息，保存原始数据，等用户输入参数后再计算
+                    specimens.append(sp)
+                    self._log(f'  ⚠️ {name}: {len(sp.load)}点 (需要输入试样尺寸)')
             except Exception as e:
                 self._log(f'  ❌ {name}: {e}')
 
