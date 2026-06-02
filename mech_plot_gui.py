@@ -325,6 +325,34 @@ class MechPlotGUI:
             sp = DataProcessor.normalize_strain_start(sp)
             self.specimens[idx] = sp
             
+            # 更新诊断信息（弹性段修正）
+            if self.fix_elastic_var.get():
+                try:
+                    orig = SpecimenData(
+                        name=sp.name, filepath=sp.filepath,
+                        load=sp.load.copy(), displacement=sp.displacement.copy(),
+                        time=sp.time.copy(),
+                        stress=sp.stress.copy() if sp.stress is not None else None,
+                        strain=sp.strain.copy() if sp.strain is not None else None,
+                        width=sp.width, thickness=sp.thickness,
+                        gauge_length=sp.gauge_length, cross_section=sp.cross_section,
+                        mode=sp.mode, composition=sp.composition, treatment=sp.treatment)
+                    
+                    # 更新或添加到 specimens_orig
+                    while len(self.specimens_orig) <= idx:
+                        self.specimens_orig.append(None)
+                    self.specimens_orig[idx] = orig
+                    
+                    diag = self.corrector.diagnose(sp)
+                    if diag.issues:
+                        self._log(f'  ⚠ {sp.name}: {"; ".join(diag.issues[:2])}')
+                        sp, diag = self.corrector.correct(sp, diag)
+                        self.specimens[idx] = sp
+                    self.diagnostics[sp.name] = diag
+                    self.props_dict[sp.name] = self.corrector.get_mechanical_properties(sp, diag)
+                except Exception as e:
+                    self._log(f'  ⚠ 弹性段修正失败: {e}')
+            
             self._log(f'✅ {name} 参数已更新: {sp.width}×{sp.thickness}mm, 标距{sp.gauge_length}mm')
             # 重新显示
             self._show_diagnostic()
@@ -497,7 +525,7 @@ class MechPlotGUI:
             return [(None, None)] * 4
 
         sp = self.specimens[idx]
-        sp_orig = self.specimens_orig[idx] if idx < len(self.specimens_orig) else sp
+        sp_orig = self.specimens_orig[idx] if idx < len(self.specimens_orig) and self.specimens_orig[idx] is not None else sp
         diag = self.diagnostics.get(name)
         props = self.props_dict.get(name, {})
         if diag is None:
