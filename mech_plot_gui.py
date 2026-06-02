@@ -318,12 +318,21 @@ class MechPlotGUI:
         if g: sp.gauge_length = g
         if w and t: sp.cross_section = w * t
         
-        # 重新计算应力应变
-        from mech_plot import DataProcessor
+        # 重新计算应力应变（从原始文件重新加载，避免重复过滤导致长度不一致）
+        from mech_plot import DataProcessor, BatchProcessor
         if sp.width and sp.thickness and sp.gauge_length:
-            sp = DataProcessor.convert_to_stress_strain(sp)
-            sp = DataProcessor.normalize_strain_start(sp)
-            self.specimens[idx] = sp
+            # 从原始文件重新加载
+            processor = BatchProcessor(mode=sp.mode, width=sp.width, thickness=sp.thickness,
+                                       gauge_length=sp.gauge_length)
+            try:
+                sp_new = processor.load_specimen(sp.filepath, sp.name)
+                sp_new = DataProcessor.convert_to_stress_strain(sp_new)
+                sp_new = DataProcessor.normalize_strain_start(sp_new)
+                self.specimens[idx] = sp_new
+                sp = sp_new
+            except Exception as e:
+                self._log(f'❌ 重新加载失败: {e}')
+                return
             
             # 更新诊断信息（弹性段修正）
             if self.fix_elastic_var.get():
