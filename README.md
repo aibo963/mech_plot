@@ -46,7 +46,7 @@ python mech_plot.py D:\实验数据\拉伸 --csv-summary
 python mech_plot_gui.py
 ```
 
-或双击 `启动GUI.bat`。
+或双击 `start_gui.bat`。
 
 ## 试样信息CSV
 
@@ -76,7 +76,7 @@ mech_plot/
 ├── mech_plot.py           # CLI 主程序
 ├── mech_plot_gui.py       # GUI 界面
 ├── specimens_template.yaml # 试样信息模板
-├── 启动GUI.bat            # Windows 快捷启动
+├── start_gui.bat          # Windows 快捷启动
 └── README.md
 ```
 
@@ -86,14 +86,6 @@ MIT
 
 ## 作者与贡献者
 
-**黄夜雨** — 安徽工业大学 材料与化工硕士
-- 算法设计与验证：弹性段检测、力学性能提取、屈服点识别
-- 测试数据提供与功能需求
-- 代码审查与问题反馈
-
-**Hermes Agent** — AI 编程助手
 - 代码实现：CLI/GUI、批量处理、四阶段诊断图
-- 弹性段修正算法（v8）：全范围扫描→精炼→截断→残差替换
-- 屈服检测逻辑优化（上下屈服搜索范围限制）
-
-致谢：安徽工业大学 材料学院、冶金学院
+- 弹性段修正算法：全范围扫描→精炼→截断→残差替换
+- 屈服检测逻辑优化

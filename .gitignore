@@ -28,3 +28,6 @@ build/
 # 环境
 venv/
 .env
+
+# 私有文件（包含个人信息）
+README_private.md
