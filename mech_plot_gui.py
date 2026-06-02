@@ -197,6 +197,7 @@ class MechPlotGUI:
         ttk.Label(r2, text='E(GPa)').pack(side='left')
         ttk.Entry(r2, textvariable=self.E_var, width=6).pack(side='left', padx=1)
         ttk.Label(r2, text='(留空不修正)', foreground='gray').pack(side='left', padx=4)
+        ttk.Button(r2, text='确认更新', command=self._update_params).pack(side='right', padx=2)
 
         # 选项 (紧凑)
         frm = ttk.LabelFrame(left, text='选项', padding=4)
@@ -276,6 +277,49 @@ class MechPlotGUI:
     def _browse_export(self):
         p = filedialog.askdirectory()
         if p: self.export_dir_var.set(p)
+
+    def _update_params(self):
+        """确认更新试样参数后重新计算"""
+        name = self.specimen_combo.get()
+        if not name or not self.specimens:
+            messagebox.showinfo('提示', '请先加载数据')
+            return
+        
+        # 获取新参数
+        try:
+            w = float(self.width_var.get()) if self.width_var.get().strip() else None
+            t = float(self.thickness_var.get()) if self.thickness_var.get().strip() else None
+            g = float(self.gauge_var.get()) if self.gauge_var.get().strip() else None
+            E = float(self.E_var.get()) if self.E_var.get().strip() else None
+        except ValueError:
+            messagebox.showerror('错误', '参数格式错误，请输入数字')
+            return
+        
+        # 更新试样参数
+        sp = self.specimens.get(name)
+        if sp:
+            if w: sp.width = w
+            if t: sp.thickness = t
+            if g: sp.gauge_length = g
+            if w and t: sp.cross_section = w * t
+            
+            # 重新计算应力应变
+            from mech_plot import DataProcessor
+            if sp.width and sp.thickness and sp.gauge_length:
+                sp = DataProcessor.convert_to_stress_strain(sp)
+                sp = DataProcessor.normalize_strain_start(sp)
+                self.specimens[name] = sp
+                
+                # 弹性模量修正
+                if E and E > 0:
+                    from mech_plot import ElasticRegionCorrector
+                    corrector = ElasticRegionCorrector()
+                    # 这里可以添加弹性模量修正逻辑
+                
+                self._log(f'✅ {name} 参数已更新: {w}×{t}mm, 标距{g}mm')
+                # 重新显示
+                self._show_diagnostic()
+        
 
     def _on_drop(self, event):
         raw = event.data.strip().strip('{}')
