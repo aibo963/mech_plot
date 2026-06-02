@@ -187,11 +187,11 @@ class MechPlotGUI:
         frm = ttk.LabelFrame(left, text='试样参数 (留空=自动提取)', padding=4)
         frm.pack(fill='x', **pad)
         r = ttk.Frame(frm); r.pack(fill='x')
-        ttk.Label(r, text='宽').pack(side='left')
+        ttk.Label(r, text='宽(mm)').pack(side='left')
         ttk.Entry(r, textvariable=self.width_var, width=6).pack(side='left', padx=1)
-        ttk.Label(r, text='厚').pack(side='left', padx=(4,0))
+        ttk.Label(r, text='厚(mm)').pack(side='left', padx=(4,0))
         ttk.Entry(r, textvariable=self.thickness_var, width=6).pack(side='left', padx=1)
-        ttk.Label(r, text='标距').pack(side='left', padx=(4,0))
+        ttk.Label(r, text='标距(mm)').pack(side='left', padx=(4,0))
         ttk.Entry(r, textvariable=self.gauge_var, width=6).pack(side='left', padx=1)
         r2 = ttk.Frame(frm); r2.pack(fill='x', pady=2)
         ttk.Label(r2, text='E(GPa)').pack(side='left')
@@ -281,8 +281,8 @@ class MechPlotGUI:
     def _update_params(self):
         """确认更新试样参数后重新计算"""
         name = self.specimen_combo.get()
-        if not name or not self.specimens:
-            messagebox.showinfo('提示', '请先加载数据')
+        if not self.specimens:
+            messagebox.showinfo('提示', '请先加载数据文件')
             return
         
         # 获取新参数
@@ -295,30 +295,39 @@ class MechPlotGUI:
             messagebox.showerror('错误', '参数格式错误，请输入数字')
             return
         
-        # 更新试样参数
-        sp = self.specimens.get(name)
-        if sp:
-            if w: sp.width = w
-            if t: sp.thickness = t
-            if g: sp.gauge_length = g
-            if w and t: sp.cross_section = w * t
+        if not any([w, t, g]):
+            messagebox.showinfo('提示', '请至少输入一个参数')
+            return
+        
+        # 查找试样（列表结构）
+        sp = None
+        idx = None
+        for i, s in enumerate(self.specimens):
+            if s.name == name:
+                sp = s
+                idx = i
+                break
+        
+        if sp is None:
+            messagebox.showinfo('提示', f'未找到试样: {name}')
+            return
+        
+        # 更新参数
+        if w: sp.width = w
+        if t: sp.thickness = t
+        if g: sp.gauge_length = g
+        if w and t: sp.cross_section = w * t
+        
+        # 重新计算应力应变
+        from mech_plot import DataProcessor
+        if sp.width and sp.thickness and sp.gauge_length:
+            sp = DataProcessor.convert_to_stress_strain(sp)
+            sp = DataProcessor.normalize_strain_start(sp)
+            self.specimens[idx] = sp
             
-            # 重新计算应力应变
-            from mech_plot import DataProcessor
-            if sp.width and sp.thickness and sp.gauge_length:
-                sp = DataProcessor.convert_to_stress_strain(sp)
-                sp = DataProcessor.normalize_strain_start(sp)
-                self.specimens[name] = sp
-                
-                # 弹性模量修正
-                if E and E > 0:
-                    from mech_plot import ElasticRegionCorrector
-                    corrector = ElasticRegionCorrector()
-                    # 这里可以添加弹性模量修正逻辑
-                
-                self._log(f'✅ {name} 参数已更新: {w}×{t}mm, 标距{g}mm')
-                # 重新显示
-                self._show_diagnostic()
+            self._log(f'✅ {name} 参数已更新: {sp.width}×{sp.thickness}mm, 标距{sp.gauge_length}mm')
+            # 重新显示
+            self._show_diagnostic()
         
 
     def _on_drop(self, event):
