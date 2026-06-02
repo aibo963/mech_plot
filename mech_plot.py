@@ -730,7 +730,9 @@ class ElasticRegionCorrector:
                 upper_val = post_elastic[upper_idx]
                 
                 if upper_idx + 1 < len(post_elastic):
-                    lower_search = post_elastic[upper_idx:]
+                    # 只在上屈服点后的前30%范围内找下屈服（避免找到曲线末端的下降段）
+                    lower_search_end = min(len(post_elastic), upper_idx + max(20, int(len(post_elastic) * 0.3)))
+                    lower_search = post_elastic[upper_idx:lower_search_end]
                     lower_idx = np.argmin(lower_search) + upper_idx
                     lower_val = post_elastic[lower_idx]
                     
@@ -1520,6 +1522,10 @@ class ElasticRegionCorrector:
         ax.margins(x=0.05, y=0.05)
         ax.set_title(f'③ 截断 (pt{cut_idx}) + 力学性能', fontsize=12, fontweight='bold')
         ax.legend(fontsize=9, loc='lower right')
+        # 限制纵坐标范围为最大应力的120%
+        if cut_idx > 0:
+            max_stress = np.max(stress_cut)
+            ax.set_ylim(0, max_stress * 1.2)
 
         # --- 阶段4: 替换滑动段 + 性能汇总 ---
         ax = axes[1, 1]
